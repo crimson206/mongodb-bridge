@@ -35,4 +35,5 @@ jobs:
     - name: Run tests with coverage
       run: |
         pytest --cov=src/crimson/pymongo_bridge --cov-report=html
-
+      env:
+        PYMONGO_CONNECTION_STRING0: ${{ secrets.PYMONGO_CONNECTION_STRING0 }}

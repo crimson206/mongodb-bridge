@@ -18,7 +18,10 @@ from crimson.pymongo_bridge.simple_chatbot import (
 @pytest.fixture(scope="session")
 def mongo_client() -> Generator[MongoClient, None, None]:
     load_dotenv("../../.env")
-    client: MongoClient = MongoClient(os.getenv("PYMONGO_CONNECTION_STRING0"))
+    client: MongoClient = MongoClient(
+        os.getenv("PYMONGO_CONNECTION_STRING0"),
+        serverSelectionTimeoutMS=5000
+    )
     yield client
     client.close()
 
