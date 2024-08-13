@@ -5,7 +5,6 @@ from typing import Optional, List, Any, Callable
 
 class IDManager:
     def __init__(self, name_space: str = "default"):
-
         self.name_space = name_space
         self.ids: List[int] = []
 
@@ -41,15 +40,43 @@ class SimpleSession(BaseModel):
     ai_meta: Optional[Any] = None
 
 
-class ChatBotClient:
+class ChatBot:
     def __init__(self, collection: Collection, name_space: str):
         self.collection = collection
         collection.create_index("id", unique=True)
-        self.id_manager = IDManager()
+        self.id_manager = IDManager(name_space)
         self.name_space = name_space
-        self.chats = List[SimpleSession]
+        self.chats: List[SimpleSession] = []
 
-    def chat(self, prompt):
+    def refresh_chats(self):
+        cursor = self.collection.find({"name_space": self.name_space})
+
+        chats = [SimpleSession(**doc) for doc in cursor]
+        ids = [chat.id for chat in chats]
+
+        self.id_manager.ids = ids
+        self.chats = chats
+
+    def empty_db(self):
+        self.collection.delete_many({"name_space": self.name_space})
+
+    def clear_chats(self):
+        self.empty_db()
+        self.id_manager.ids = []
+        self.chats = []
+
+    def force_chats(self):
+        self.empty_db()
+
+        if self.chats:
+            chat_dicts = [chat.model_dump() for chat in self.chats]
+            self.collection.insert_many(chat_dicts)
+
+        self.id_manager.ids = [chat.id for chat in self.chats]
+
+
+class ChatBotClient(ChatBot):
+    def chat(self, prompt: str):
         chat = SimpleSession(
             name_space=self.name_space,
             id=self.id_manager.generate_next_max_id(register=True),
@@ -59,7 +86,7 @@ class ChatBotClient:
 
         self.collection.insert_one(chat.model_dump())
 
-    def rechat(self, prompt):
+    def rechat(self, prompt: str):
         current_id = self.id_manager.max_id
 
         if current_id is None:
@@ -72,57 +99,35 @@ class ChatBotClient:
             {"$set": {"prompt": prompt, "generated_text": generated_text}},
         )
 
-    def refresh_chats(self):
-        cursor = self.collection.find({"name_space": self.name_space})
 
-        chats = [SimpleSession(**doc) for doc in cursor]
-        ids = [chat.id for chat in chats]
-
-        self.id_manager.ids = ids
-        self.chats = chats
-
-
-def generate_fn(chats):
+def generate_fn(chats: List[SimpleSession]) -> str:
     return "Message from chatbot."
 
 
-class ChatBotServer:
+class ChatBotServer(ChatBot):
     def __init__(
         self,
         collection: Collection,
         name_space: str,
-        generate_fn: Callable = generate_fn,
+        generate_fn: Callable[[List[SimpleSession]], str] = generate_fn,
     ):
-        self.collection = collection
-        collection.create_index("id", unique=True)
-        self.id_manager = IDManager()
-        self.name_space = name_space
-        self.chats = List[SimpleSession]
+        super().__init__(collection, name_space)
         self.generate_fn = generate_fn
 
     def answer(self):
         self.refresh_chats()
 
-        # 텍스트 생성
+        # Generate text
         generated_text = self.generate_fn(self.chats)
 
-        # 현재 최대 ID 가져오기
+        # Get the current max ID
         current_id = self.id_manager.max_id
 
         if current_id is not None:
-            # 특정 ID의 generated_text 필드만 업데이트
+            # Update only the generated_text field for the specific ID
             self.collection.update_one(
                 {"id": current_id, "name_space": self.name_space},
                 {"$set": {"generated_text": generated_text}},
             )
         else:
             raise Exception("No valid ID found in IDManager.")
-
-    def refresh_chats(self):
-        cursor = self.collection.find({"name_space": self.name_space})
-
-        chats = [SimpleSession(**doc) for doc in cursor]
-        ids = [chat.id for chat in chats]
-
-        self.id_manager.ids = ids
-        self.chats = chats
