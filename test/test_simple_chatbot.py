@@ -1,5 +1,5 @@
-# File: conftest.py
 import os
+import sys
 from typing import Generator
 
 import pytest
@@ -11,16 +11,18 @@ from crimson.pymongo_bridge.simple_chatbot import (
     ChatBotClient,
     ChatBotServer,
     IDManager,
-    SimpleSession,
+    SimpleSession
 )
+
+# Get Python version
+PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}"
 
 
 @pytest.fixture(scope="session")
 def mongo_client() -> Generator[MongoClient, None, None]:
     load_dotenv("../../.env")
     client: MongoClient = MongoClient(
-        os.getenv("PYMONGO_CONNECTION_STRING0"),
-        serverSelectionTimeoutMS=5000
+        os.getenv("PYMONGO_CONNECTION_STRING0"), serverSelectionTimeoutMS=5000
     )
     yield client
     client.close()
@@ -29,14 +31,16 @@ def mongo_client() -> Generator[MongoClient, None, None]:
 @pytest.fixture(scope="session")
 def test_collection(mongo_client: MongoClient) -> Generator[Collection, None, None]:
     db = mongo_client.get_database("pymongo-bridge")
-    collection: Collection = db.get_collection("pytest_13_08_2024")
+    collection_name = f"pytest_{PYTHON_VERSION}_{os.getpid()}"  # Include Python version and process ID
+    collection: Collection = db.get_collection(collection_name)
     yield collection
     collection.drop()
 
 
 @pytest.fixture(scope="function")
 def chatbot_client(test_collection: Collection) -> Generator[ChatBotClient, None, None]:
-    client = ChatBotClient(test_collection, "pytest_namespace")
+    namespace = f"pytest_namespace_{PYTHON_VERSION}_{os.getpid()}"  # Include Python version and process ID
+    client = ChatBotClient(test_collection, namespace)
     client.clear_chats()
     yield client
     client.clear_chats()
@@ -44,7 +48,8 @@ def chatbot_client(test_collection: Collection) -> Generator[ChatBotClient, None
 
 @pytest.fixture(scope="function")
 def chatbot_server(test_collection: Collection) -> Generator[ChatBotServer, None, None]:
-    server = ChatBotServer(test_collection, "pytest_namespace")
+    namespace = f"pytest_namespace_{PYTHON_VERSION}_{os.getpid()}"  # Include Python version and process ID
+    server = ChatBotServer(test_collection, namespace)
     yield server
 
 
@@ -119,7 +124,9 @@ def test_chatbot_force_chats(chatbot_client: ChatBotClient):
 
     # Modify chats in memory without updating the database
     chatbot_client.chats.append(
-        SimpleSession(name_space=chatbot_client.name_space, id=100, prompt="Test message")
+        SimpleSession(
+            name_space=chatbot_client.name_space, id=100, prompt="Test message"
+        )
     )
 
     # Force chats (this should update the database with the in-memory state)
