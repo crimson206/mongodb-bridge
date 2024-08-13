@@ -12,7 +12,7 @@ authors = [
 ]
 
 classifiers = [
-    "Development Status :: Pre-Alpha",
+    "Development Status :: 2 - Pre-Alpha",
 
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
